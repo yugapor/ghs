@@ -3,6 +3,14 @@ name: release
 on:
   push:
     tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Existing tag to (re)build, e.g. v0.1.0"
+        required: true
+
+env:
+  TAG: ${{ inputs.tag || github.ref_name }}
 
 permissions:
   contents: write
@@ -12,6 +20,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ env.TAG }}
       - uses: mlugg/setup-zig@v2
         with:
           version: 0.16.0
@@ -24,7 +34,7 @@ jobs:
           mkdir -p dist
           for t in x86_64-windows aarch64-windows x86_64-macos aarch64-macos x86_64-linux-musl aarch64-linux-musl; do
             zig build -Dtarget=$t -Doptimize=ReleaseSmall --prefix out/$t
-            name=ghs-${GITHUB_REF_NAME}-$t
+            name=ghs-${TAG}-$t
             if [[ $t == *windows ]]; then
               (cd out/$t/bin && zip -q ../../../dist/$name.zip ghs.exe)
             else
@@ -36,4 +46,4 @@ jobs:
       - name: Release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" dist/* --generate-notes
+        run: gh release upload "$TAG" dist/* --clobber || gh release create "$TAG" dist/* --generate-notes
